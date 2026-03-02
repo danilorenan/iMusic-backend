@@ -126,3 +126,37 @@ async def prefetch(req: PrefetchRequest):
         except:
             results[video_id] = "failed"
     return {"results": results}
+
+@app.get("/debug/{video_id}")
+async def debug_formats(video_id: str):
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'socket_timeout': 15,
+    }
+    
+    if COOKIES_PATH:
+        ydl_opts['cookiefile'] = COOKIES_PATH
+
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False, process=False)
+            formats = []
+            for f in info.get("formats", []):
+                formats.append({
+                    "id": f.get("format_id"),
+                    "ext": f.get("ext"),
+                    "acodec": f.get("acodec"),
+                    "vcodec": f.get("vcodec"),
+                    "abr": f.get("abr"),
+                    "resolution": f.get("resolution"),
+                    "note": f.get("format_note"),
+                })
+            return {
+                "title": info.get("title"),
+                "total_formats": len(formats),
+                "formats": formats,
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
