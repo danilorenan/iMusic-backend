@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 import yt_dlp
 import time
 import asyncio
+import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pydantic import BaseModel
 from typing import List
@@ -23,13 +25,48 @@ CACHE_TTL = 18000
 
 executor = ThreadPoolExecutor(max_workers=4)
 
+# ── Cookies Setup ──────────────────────────────────────────────
+def _get_cookies_path() -> str | None:
+    """
+    Prioridade:
+    1. Arquivo cookies.txt na raiz do projeto
+    2. Variável de ambiente YOUTUBE_COOKIES (conteúdo do arquivo)
+    """
+    # Opção 1: arquivo direto
+    local_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+    if os.path.exists(local_path):
+        print("🍪 Usando cookies.txt local")
+        return local_path
+    
+    # Opção 2: variável de ambiente
+    cookies_env = os.environ.get("YOUTUBE_COOKIES", "")
+    if cookies_env:
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, prefix="yt_cookies_"
+        )
+        tmp.write(cookies_env)
+        tmp.close()
+        print(f"🍪 Cookies carregados da env → {tmp.name}")
+        return tmp.name
+    
+    print("⚠️ Nenhum cookie encontrado — YouTube pode bloquear!")
+    return None
+
+COOKIES_PATH = _get_cookies_path()
+# ───────────────────────────────────────────────────────────────
+
 def _extract(video_id: str) -> dict:
     ydl_opts = {
         'format': 'bestaudio[ext=m4a]/bestaudio',
         'quiet': True,
         'no_warnings': True,
-        'socket_timeout': 10,
+        'socket_timeout': 15,
     }
+    
+    # Adiciona cookies se disponível
+    if COOKIES_PATH:
+        ydl_opts['cookiefile'] = COOKIES_PATH
+
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -47,7 +84,11 @@ def _extract(video_id: str) -> dict:
 
 @app.get("/")
 def health():
-    return {"status": "Render is Awake 🚀", "cached_items": len(cache)}
+    return {
+        "status": "Render is Awake 🚀",
+        "cached_items": len(cache),
+        "cookies_loaded": COOKIES_PATH is not None,
+    }
 
 @app.get("/audio/{video_id}")
 async def get_audio(video_id: str):
