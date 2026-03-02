@@ -57,7 +57,7 @@ COOKIES_PATH = _get_cookies_path()
 
 def _extract(video_id: str) -> dict:
     ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio',
+        'format': 'bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'socket_timeout': 15,
